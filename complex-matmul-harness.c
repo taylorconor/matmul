@@ -152,7 +152,7 @@ void matmul(struct complex ** A, struct complex ** B, struct complex ** C, int a
 	}
 }
 
-#define NUM_THREADS	63
+#define NUM_THREADS	7
 
 struct complex **gA, **gB, **gC;
 int ga_rows, ga_cols, gb_cols, g_size;
@@ -163,31 +163,42 @@ typedef union {
 } Vector;
 
 void *go(void *i) {
-	uint32_t j, k;
+	int32_t j, k;
 	long ii = (long)i;
+
+    Vector v0;
+    Vector v1;
 
 	while (ii < gb_cols) {
 		for (j = 0; j < ga_rows; j++) {
 			uint32_t result_row = ii / ga_rows, 
 					 result_col = ii % ga_rows;
 
-			for (k = 0; k < ga_rows; k++) {
-				struct complex temp_a = gA[j][k];
-				struct complex temp_b = gB[k][ii];
+			for (k = 0; k < ga_rows-1; k += 2) {
+				struct complex temp_a0 = gA[j][k];
+				struct complex temp_b0 = gB[k][ii];
+            	struct complex temp_a1 = gA[j][k+1];
+				struct complex temp_b1 = gB[k+1][ii];
 
-				__m128 mul1 = _mm_setr_ps(temp_a.real, temp_a.real, -temp_a.imag, temp_a.imag);
-				__m128 mul2 = _mm_setr_ps(temp_b.real, temp_b.imag, temp_b.imag, temp_b.real);
 
-				Vector v;
-				v.vector = _mm_mul_ps(mul1, mul2);
+				__m128 mul0 = _mm_setr_ps(temp_a0.real, temp_a0.real, -temp_a0.imag, temp_a0.imag);
+				__m128 mul1 = _mm_setr_ps(temp_b0.real, temp_b0.imag, temp_b0.imag, temp_b0.real);
+            	__m128 mul2 = _mm_setr_ps(temp_a1.real, temp_a1.real, -temp_a1.imag, temp_a1.imag);
+				__m128 mul3 = _mm_setr_ps(temp_b1.real, temp_b1.imag, temp_b1.imag, temp_b1.real);
+
+	            v0.vector = _mm_mul_ps(mul0, mul1);
+                v1.vector = _mm_mul_ps(mul2, mul3);
 
 				//gC[j][ii].real += (temp_a.real * temp_b.real) + (-temp_a.imag * temp_b.imag);
 				//gC[j][ii].imag += (temp_a.real * temp_b.imag) + (temp_a.imag * temp_b.real);
-				
-				gC[j][ii].real += v.access[0] + v.access[2];
-				gC[j][ii].imag += v.access[1] + v.access[3];
-			}
-		}
+			
+				gC[j][ii].real += v0.access[0] + v0.access[2];
+				gC[j][ii].imag += v0.access[1] + v0.access[3];
+
+                gC[j][ii].real += v1.access[0] + v1.access[2];
+				gC[j][ii].imag += v1.access[1] + v1.access[3];
+            }
+       }
 
 		ii += NUM_THREADS;
 	}
