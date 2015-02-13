@@ -8,7 +8,7 @@
 //#include <omp.h>
 #include <stdint.h>
 #include <pthread.h>
-
+#include <x86intrin.h>
 
 
 /* the following two definitions of DEBUGGING control whether or not
@@ -157,6 +157,11 @@ void matmul(struct complex ** A, struct complex ** B, struct complex ** C, int a
 struct complex **gA, **gB, **gC;
 int ga_rows, ga_cols, gb_cols, g_size;
 
+typedef union {
+	__m128 vector;
+	float access[4];
+} Vector;
+
 void *go(void *i) {
 	uint32_t j, k;
 	long ii = (long)i;
@@ -169,28 +174,23 @@ void *go(void *i) {
 			for (k = 0; k < ga_rows; k++) {
 				struct complex temp_a = gA[j][k];
 				struct complex temp_b = gB[k][ii];
-				gC[j][ii].real += (temp_a.real * temp_b.real) + (-temp_a.imag * temp_b.imag);
-				gC[j][ii].imag += (temp_a.real * temp_b.imag) + (temp_a.imag * temp_b.real); 
+
+				__m128 mul1 = _mm_setr_ps(temp_a.real, temp_a.real, -temp_a.imag, temp_a.imag);
+				__m128 mul2 = _mm_setr_ps(temp_b.real, temp_b.imag, temp_b.imag, temp_b.real);
+
+				Vector v;
+				v.vector = _mm_mul_ps(mul1, mul2);
+
+				//gC[j][ii].real += (temp_a.real * temp_b.real) + (-temp_a.imag * temp_b.imag);
+				//gC[j][ii].imag += (temp_a.real * temp_b.imag) + (temp_a.imag * temp_b.real);
+				
+				gC[j][ii].real += v.access[0] + v.access[2];
+				gC[j][ii].imag += v.access[1] + v.access[3];
 			}
 		}
 
 		ii += NUM_THREADS;
 	}
-
-	/*
-	while (ii < g_size) { 
-		uint32_t result_row = ii / ga_rows, result_col = ii % ga_rows;
-		for (j = 0; j < ga_rows; j+=1) { //ga_rows = gb_cols
-
-			struct complex temp_a = gA[result_row][j];
-			struct complex temp_b = gB[j][result_col];
-			gC[result_row][result_col].real += (temp_a.real * temp_b.real) + (-temp_a.imag * temp_b.imag);
-			gC[result_row][result_col].imag += (temp_a.real * temp_b.imag) + (temp_a.imag * temp_b.real); 
-
-		}
-
-		ii += NUM_THREADS;
-	}*/
 	return NULL;
 }
 
