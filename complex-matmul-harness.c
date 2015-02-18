@@ -166,157 +166,128 @@ void *go(void *i) {
 	int32_t j, k;
 	long ii = (long)i;
 
-    Vector v0;
-    Vector v1;
+    Vector v00;
+    Vector v01;
+    Vector v10;
+    Vector v11;
+	Vector v20;
+    Vector v21;
+	Vector v30;
+    Vector v31;
+
 
 	while (ii < gb_cols) {
 		for (j = 0; j < ga_rows-3; j += 4) {
-			//uint32_t result_row = ii / ga_rows, 
-			//		 result_col = ii % ga_rows;
-
 			for (k = 0; k < ga_rows-3; k += 4) {
-				//struct complex temp_a = gA[j][k];
-				//struct complex temp_b = gB[k][ii];
+				struct complex temp_a00 = gA[j][k];
+				struct complex temp_a01 = gA[j+1][k];
+				struct complex temp_a02 = gA[j+2][k];
+				struct complex temp_a03 = gA[j+3][k];
+				struct complex temp_a10 = gA[j][k+1];
+				struct complex temp_a11 = gA[j+1][k+1];
+				struct complex temp_a12 = gA[j+2][k+1];
+				struct complex temp_a13 = gA[j+3][k+1];
+				struct complex temp_a20 = gA[j][k+2];
+				struct complex temp_a21 = gA[j+1][k+2];
+				struct complex temp_a22 = gA[j+2][k+2];
+				struct complex temp_a23 = gA[j+3][k+2];
+				struct complex temp_a30 = gA[j][k+3];
+				struct complex temp_a31 = gA[j+1][k+3];
+				struct complex temp_a32 = gA[j+2][k+3];
+				struct complex temp_a33 = gA[j+3][k+3];
 
-				// B array only requires one column
 				struct complex temp_b0 = gB[k][ii];
 				struct complex temp_b1 = gB[k+1][ii];
 				struct complex temp_b2 = gB[k+2][ii];
 				struct complex temp_b3 = gB[k+3][ii];
-				__m128 b_real = _mm_setr_ps(temp_b0.real, temp_b1.real, temp_b2.real, temp_b3.real);
-				__m128 b_imag = _mm_setr_ps(temp_b0.imag, temp_b1.imag, temp_b2.imag, temp_b3.imag);
 
-				// A array requires 4 rows (since we unrolled the look into 4)
-				struct complex temp_a00 = gA[j][k];
-				struct complex temp_a01 = gA[j][k+1];
-				struct complex temp_a02 = gA[j][k+2];
-				struct complex temp_a03 = gA[j][k+3];
 				__m128 a0_real = _mm_setr_ps(temp_a00.real, temp_a01.real, temp_a02.real, temp_a03.real);
 				__m128 a0_imag = _mm_setr_ps(temp_a00.imag, temp_a01.imag, temp_a02.imag, temp_a03.imag);
-				__m128 a0_nimag = _mm_setr_ps(-temp_a00.imag, -temp_a01.imag, -temp_a02.imag, -temp_a03.imag);
+				__m128 a0_nmag = _mm_setr_ps(-temp_a00.imag, -temp_a01.imag, -temp_a02.imag, -temp_a03.imag);
 
-				struct complex temp_a10 = gA[j+1][k];
-				struct complex temp_a11 = gA[j+1][k+1];
-				struct complex temp_a12 = gA[j+1][k+2];
-				struct complex temp_a13 = gA[j+1][k+3];
 				__m128 a1_real = _mm_setr_ps(temp_a10.real, temp_a11.real, temp_a12.real, temp_a13.real);
 				__m128 a1_imag = _mm_setr_ps(temp_a10.imag, temp_a11.imag, temp_a12.imag, temp_a13.imag);
-				__m128 a1_nimag = _mm_setr_ps(-temp_a10.imag, -temp_a11.imag, -temp_a12.imag, -temp_a13.imag);
-
-				struct complex temp_a20 = gA[j+2][k];
-				struct complex temp_a21 = gA[j+2][k+1];
-				struct complex temp_a22 = gA[j+2][k+2];
-				struct complex temp_a23 = gA[j+2][k+3];
+				__m128 a1_nmag = _mm_setr_ps(-temp_a10.imag, -temp_a11.imag, -temp_a12.imag, -temp_a13.imag);
+				
 				__m128 a2_real = _mm_setr_ps(temp_a20.real, temp_a21.real, temp_a22.real, temp_a23.real);
 				__m128 a2_imag = _mm_setr_ps(temp_a20.imag, temp_a21.imag, temp_a22.imag, temp_a23.imag);
-				__m128 a2_nimag = _mm_setr_ps(-temp_a20.imag, -temp_a21.imag, -temp_a22.imag, -temp_a23.imag);
-
-				struct complex temp_a30 = gA[j+3][k];
-				struct complex temp_a31 = gA[j+3][k+1];
-				struct complex temp_a32 = gA[j+3][k+2];
-				struct complex temp_a33 = gA[j+3][k+3];
+				__m128 a2_nmag = _mm_setr_ps(-temp_a20.imag, -temp_a21.imag, -temp_a22.imag, -temp_a23.imag);
+				
 				__m128 a3_real = _mm_setr_ps(temp_a30.real, temp_a31.real, temp_a32.real, temp_a33.real);
 				__m128 a3_imag = _mm_setr_ps(temp_a30.imag, temp_a31.imag, temp_a32.imag, temp_a33.imag);
-				__m128 a3_nimag = _mm_setr_ps(-temp_a30.imag, -temp_a31.imag, -temp_a32.imag, -temp_a33.imag);
+				__m128 a3_nmag = _mm_setr_ps(-temp_a30.imag, -temp_a31.imag, -temp_a32.imag, -temp_a33.imag);
 
+
+				__m128 b0_real = _mm_setr_ps(temp_b0.real, temp_b0.real, temp_b0.real, temp_b0.real);
+				__m128 b0_imag = _mm_setr_ps(temp_b0.imag, temp_b0.imag, temp_b0.imag, temp_b0.imag);
 				
-				// a.real * b.real mul
-				__m128 mul0_pr0 = _mm_mul_ps(a0_real, b_real); 				
-				__m128 mul0_pr1 = _mm_mul_ps(a1_real, b_real); 				
-				__m128 mul0_pr2 = _mm_mul_ps(a2_real, b_real); 				
-				__m128 mul0_pr3 = _mm_mul_ps(a3_real, b_real); 				
-			
-				// -a.imag * b.imag mul
-				__m128 mul1_pr0 = _mm_mul_ps(a0_nimag, b_imag); 				
-				__m128 mul1_pr1 = _mm_mul_ps(a1_nimag, b_imag); 				
-				__m128 mul1_pr2 = _mm_mul_ps(a2_nimag, b_imag); 				
-				__m128 mul1_pr3 = _mm_mul_ps(a3_nimag, b_imag); 				
-
-				// a.real * b.real mul
-				__m128 mul2_pr0 = _mm_mul_ps(a0_real, b_imag); 				
-				__m128 mul2_pr1 = _mm_mul_ps(a1_real, b_imag); 				
-				__m128 mul2_pr2 = _mm_mul_ps(a2_real, b_imag); 				
-				__m128 mul2_pr3 = _mm_mul_ps(a3_real, b_imag); 				
-
-				// a.imag * b.real mul
-				__m128 mul3_pr0 = _mm_mul_ps(a0_imag, b_real); 				
-				__m128 mul3_pr1 = _mm_mul_ps(a1_imag, b_real); 				
-				__m128 mul3_pr2 = _mm_mul_ps(a2_imag, b_real); 				
-				__m128 mul3_pr3 = _mm_mul_ps(a3_imag, b_real); 				
-
+				__m128 b1_real = _mm_setr_ps(temp_b1.real, temp_b1.real, temp_b1.real, temp_b1.real);
+				__m128 b1_imag = _mm_setr_ps(temp_b1.imag, temp_b1.imag, temp_b1.imag, temp_b1.imag);
 				
-				// (a.real * b.real) + (-a.imag * b.imag) add	
-				__m128 add0_pr0 = _mm_add_ps(mul0_pr0, mul1_pr0);
-				__m128 add0_pr1 = _mm_add_ps(mul0_pr1, mul1_pr1);
-				__m128 add0_pr2 = _mm_add_ps(mul0_pr2, mul1_pr2);
-				__m128 add0_pr3 = _mm_add_ps(mul0_pr3, mul1_pr3);
-
-				// (a.real * b.imag) + (a.imag * b.real) add
-				__m128 add1_pr0 = _mm_add_ps(mul2_pr0, mul3_pr0);
-				__m128 add1_pr1 = _mm_add_ps(mul2_pr1, mul3_pr1);
-				__m128 add1_pr2 = _mm_add_ps(mul2_pr2, mul3_pr2);
-				__m128 add1_pr3 = _mm_add_ps(mul2_pr3, mul3_pr3);
-
-			/*	
-				gC[j][ii].real += // horizontal add add0_pr0
-				gC[j+1][ii].real += // horizontal add add0_pr1
-				gC[j+2][ii].real += // horizontal add add0_pr2
-				gC[j+3][ii].real += // horizontal add add0_pr3
-	
-				gC[j][ii].imag += // horizontal add add1_pr0
-				gC[j+1][ii].imag += // horizontal add add1_pr1
-				gC[j+2][ii].imag += // horizontal add add1_pr2
-				gC[j+3][ii].imag += // horizontal add add1_pr3
-			*/
-				v0.vector = _mm_hadd_ps(add0_pr0, add0_pr0);
-				v0.vector = _mm_hadd_ps(add0_pr0, add0_pr0);
-				v1.vector = _mm_hadd_ps(add1_pr0, add1_pr0);
-				v1.vector = _mm_hadd_ps(add1_pr0, add1_pr0);
-				gC[j][ii].real += v0.access[0];
-				gC[j][ii].imag += v1.access[0];
+				__m128 b2_real = _mm_setr_ps(temp_b2.real, temp_b2.real, temp_b2.real, temp_b2.real);
+				__m128 b2_imag = _mm_setr_ps(temp_b2.imag, temp_b2.imag, temp_b2.imag, temp_b2.imag);
 				
-				v0.vector = _mm_hadd_ps(add0_pr1, add0_pr1);
-				v0.vector = _mm_hadd_ps(add0_pr1, add0_pr1);
-				v1.vector = _mm_hadd_ps(add1_pr1, add1_pr1);
-				v1.vector = _mm_hadd_ps(add1_pr1, add1_pr1);
-				gC[j+1][ii].real += v0.access[0];
-				gC[j+1][ii].imag += v1.access[0];
+				__m128 b3_real = _mm_setr_ps(temp_b3.real, temp_b3.real, temp_b3.real, temp_b3.real);
+				__m128 b3_imag = _mm_setr_ps(temp_b3.imag, temp_b3.imag, temp_b3.imag, temp_b3.imag);
+
+
+				__m128 mul00 = _mm_mul_ps(a0_real, b0_real);
+				__m128 mul01 = _mm_mul_ps(a0_nmag, b0_imag);
+				__m128 mul02 = _mm_mul_ps(a0_real, b0_imag);
+				__m128 mul03 = _mm_mul_ps(a0_imag, b0_real);
+
+				__m128 mul10 = _mm_mul_ps(a1_real, b1_real);
+				__m128 mul11 = _mm_mul_ps(a1_nmag, b1_imag);
+				__m128 mul12 = _mm_mul_ps(a1_real, b1_imag);
+				__m128 mul13 = _mm_mul_ps(a1_imag, b1_real);
+
+				__m128 mul20 = _mm_mul_ps(a2_real, b2_real);
+				__m128 mul21 = _mm_mul_ps(a2_nmag, b2_imag);
+				__m128 mul22 = _mm_mul_ps(a2_real, b2_imag);
+				__m128 mul23 = _mm_mul_ps(a2_imag, b2_real);
+
+				__m128 mul30 = _mm_mul_ps(a3_real, b3_real);
+				__m128 mul31 = _mm_mul_ps(a3_nmag, b3_imag);
+				__m128 mul32 = _mm_mul_ps(a3_real, b3_imag);
+				__m128 mul33 = _mm_mul_ps(a3_imag, b3_real);
+
+
+
+				v00.vector = _mm_add_ps(mul00, mul01);
+				v01.vector = _mm_add_ps(mul02, mul03);
 				
-				v0.vector = _mm_hadd_ps(add0_pr2, add0_pr2);
-				v0.vector = _mm_hadd_ps(add0_pr2, add0_pr2);
-				v1.vector = _mm_hadd_ps(add1_pr2, add1_pr2);
-				v1.vector = _mm_hadd_ps(add1_pr2, add1_pr2);
-				gC[j+2][ii].real += v0.access[0];
-				gC[j+2][ii].imag += v1.access[0];
+				v10.vector = _mm_add_ps(mul10, mul11);
+				v11.vector = _mm_add_ps(mul12, mul13);
 				
-				v0.vector = _mm_hadd_ps(add0_pr3, add0_pr3);
-				v0.vector = _mm_hadd_ps(add0_pr3, add0_pr3);
-				v1.vector = _mm_hadd_ps(add1_pr3, add1_pr3);
-				v1.vector = _mm_hadd_ps(add1_pr3, add1_pr3);
-				gC[j+3][ii].real += v0.access[0];
-				gC[j+3][ii].imag += v1.access[0];
+				v20.vector = _mm_add_ps(mul20, mul21);
+				v21.vector = _mm_add_ps(mul22, mul23);
 				
-				/*struct complex temp_a1 = gA[j][k+1];
-				struct complex temp_b1 = gB[k+1][ii];
+				v30.vector = _mm_add_ps(mul30, mul31);
+				v31.vector = _mm_add_ps(mul32, mul33);
 
 
-				__m128 mul0 = _mm_setr_ps(temp_a0.real, temp_a0.real, -temp_a0.imag, temp_a0.imag);
-				__m128 mul1 = _mm_setr_ps(temp_b0.real, temp_b0.imag, temp_b0.imag, temp_b0.real);
-            	__m128 mul2 = _mm_setr_ps(temp_a1.real, temp_a1.real, -temp_a1.imag, temp_a1.imag);
-				__m128 mul3 = _mm_setr_ps(temp_b1.real, temp_b1.imag, temp_b1.imag, temp_b1.real);
+				gC[j][ii].real += v00.access[0] + v10.access[0] + v20.access[0] + v30.access[0];
+				gC[j][ii].imag += v01.access[0] + v11.access[0] + v21.access[0] + v31.access[0];
+				gC[j+1][ii].real += v00.access[1] + v10.access[1] + v20.access[1] + v30.access[1];
+				gC[j+1][ii].imag += v01.access[1] + v11.access[1] + v21.access[1] + v31.access[1];
+				gC[j+2][ii].real += v00.access[2] + v10.access[2] + v20.access[2] + v30.access[2];
+				gC[j+2][ii].imag += v01.access[2] + v11.access[2] + v21.access[2] + v31.access[2];
+				gC[j+3][ii].real += v00.access[3] + v10.access[3] + v20.access[3] + v30.access[3];
+				gC[j+3][ii].imag += v01.access[3] + v11.access[3] + v21.access[3] + v31.access[3];
 
-	            v0.vector = _mm_mul_ps(mul0, mul1);
-                v1.vector = _mm_mul_ps(mul2, mul3);
-*/
-				//gC[j][ii].real += (temp_a.real * temp_b.real) + (-temp_a.imag * temp_b.imag);
-				//gC[j][ii].imag += (temp_a.real * temp_b.imag) + (temp_a.imag * temp_b.real);
-			
-				/*gC[j][ii].real += v0.access[0] + v0.access[2];
-				gC[j][ii].imag += v0.access[1] + v0.access[3];
 
-                gC[j][ii].real += v1.access[0] + v1.access[2];
-				gC[j][ii].imag += v1.access[1] + v1.access[3];
-           */ }
+			/*	gC[j][ii].real += (temp_a0.real * temp_b.real) + (-temp_a0.imag * temp_b.imag);
+				gC[j][ii].imag += (temp_a0.real * temp_b.imag) + (temp_a0.imag * temp_b.real);
+
+				gC[j+1][ii].real += (temp_a1.real * temp_b.real) + (-temp_a1.imag * temp_b.imag);
+				gC[j+1][ii].imag += (temp_a1.real * temp_b.imag) + (temp_a1.imag * temp_b.real);
+
+				gC[j+2][ii].real += (temp_a2.real * temp_b.real) + (-temp_a2.imag * temp_b.imag);
+				gC[j+2][ii].imag += (temp_a2.real * temp_b.imag) + (temp_a2.imag * temp_b.real);
+
+				gC[j+3][ii].real += (temp_a3.real * temp_b.real) + (-temp_a3.imag * temp_b.imag);
+				gC[j+3][ii].imag += (temp_a3.real * temp_b.imag) + (temp_a3.imag * temp_b.real);*/
+			}
        }
 
 		ii += NUM_THREADS;
