@@ -157,6 +157,8 @@ void matmul(struct complex ** A, struct complex ** B, struct complex ** C, int a
 struct complex **gA, **gB, **gC;
 int ga_rows, ga_cols, gb_cols, g_size;
 
+float **a_real, **a_imag, **b_real, **b_imag;
+
 typedef union {
 	__m128 vector;
 	float access[4];
@@ -166,14 +168,49 @@ void *go(void *i) {
 	int32_t j, k;
 	long ii = (long)i;
 
-    Vector v00;
-    Vector v01;
-    Vector v10;
-    Vector v11;
+	Vector add_real, add_imag;
+
+	while (ii < ga_rows) {
+		for (j = 0; j < gb_cols; j++) {
+			for (k = 0; k < ga_cols-3; k += 4) {
+				__m128 va_real = _mm_setr_ps(a_real[ii][k], a_real[ii][k+1], a_real[ii][k+2], a_real[ii][k+3]);
+				__m128 va_imag = _mm_setr_ps(a_imag[ii][k], a_imag[ii][k+1], a_imag[ii][k+2], a_real[ii][k+3]);
+				__m128 va_nmag = _mm_setr_ps(-a_imag[ii][k], -a_imag[ii][k+1], -a_imag[ii][k+2], -a_imag[ii][k+3]);
+				__m128 vb_real = _mm_setr_ps(b_real[ii][k], b_real[ii][k+1], b_real[ii][k+2], b_real[ii][k+3]);
+				__m128 vb_imag = _mm_setr_ps(b_imag[ii][k], b_imag[ii][k+1], b_imag[ii][k+2], b_imag[ii][k+3]);
+
+				__m128 mul0 = _mm_mul_ps(va_real, vb_real);
+				__m128 mul1 = _mm_mul_ps(va_nmag, vb_imag);
+				__m128 mul2 = _mm_mul_ps(va_real, vb_imag);
+				__m128 mul3 = _mm_mul_ps(va_imag, vb_real);
+
+				add_real.vector = _mm_mul_ps(mul0, mul1);
+				add_imag.vector = _mm_mul_ps(mul2, mul3);
+
+				gC[ii][j].real += add_real.access[0]+add_real.access[1]+add_real.access[2]+add_real.access[3];
+				gC[ii][j].imag += add_imag.access[0]+add_imag.access[1]+add_imag.access[2]+add_imag.access[3];
+			}
+		}
+		ii += NUM_THREADS;
+	}
+
+	return NULL;
+}
+
+
+/*
+void *go(void *i) {
+	int32_t j, k;
+	long ii = (long)i;
+
+	Vector v00;
+	Vector v01;
+	Vector v10;
+	Vector v11;
 	Vector v20;
-    Vector v21;
+	Vector v21;
 	Vector v30;
-    Vector v31;
+	Vector v31;
 
 
 	while (ii < gb_cols) {
@@ -208,11 +245,11 @@ void *go(void *i) {
 				__m128 a1_real = _mm_setr_ps(temp_a10.real, temp_a11.real, temp_a12.real, temp_a13.real);
 				__m128 a1_imag = _mm_setr_ps(temp_a10.imag, temp_a11.imag, temp_a12.imag, temp_a13.imag);
 				__m128 a1_nmag = _mm_setr_ps(-temp_a10.imag, -temp_a11.imag, -temp_a12.imag, -temp_a13.imag);
-				
+
 				__m128 a2_real = _mm_setr_ps(temp_a20.real, temp_a21.real, temp_a22.real, temp_a23.real);
 				__m128 a2_imag = _mm_setr_ps(temp_a20.imag, temp_a21.imag, temp_a22.imag, temp_a23.imag);
 				__m128 a2_nmag = _mm_setr_ps(-temp_a20.imag, -temp_a21.imag, -temp_a22.imag, -temp_a23.imag);
-				
+
 				__m128 a3_real = _mm_setr_ps(temp_a30.real, temp_a31.real, temp_a32.real, temp_a33.real);
 				__m128 a3_imag = _mm_setr_ps(temp_a30.imag, temp_a31.imag, temp_a32.imag, temp_a33.imag);
 				__m128 a3_nmag = _mm_setr_ps(-temp_a30.imag, -temp_a31.imag, -temp_a32.imag, -temp_a33.imag);
@@ -220,13 +257,13 @@ void *go(void *i) {
 
 				__m128 b0_real = _mm_setr_ps(temp_b0.real, temp_b0.real, temp_b0.real, temp_b0.real);
 				__m128 b0_imag = _mm_setr_ps(temp_b0.imag, temp_b0.imag, temp_b0.imag, temp_b0.imag);
-				
+
 				__m128 b1_real = _mm_setr_ps(temp_b1.real, temp_b1.real, temp_b1.real, temp_b1.real);
 				__m128 b1_imag = _mm_setr_ps(temp_b1.imag, temp_b1.imag, temp_b1.imag, temp_b1.imag);
-				
+
 				__m128 b2_real = _mm_setr_ps(temp_b2.real, temp_b2.real, temp_b2.real, temp_b2.real);
 				__m128 b2_imag = _mm_setr_ps(temp_b2.imag, temp_b2.imag, temp_b2.imag, temp_b2.imag);
-				
+
 				__m128 b3_real = _mm_setr_ps(temp_b3.real, temp_b3.real, temp_b3.real, temp_b3.real);
 				__m128 b3_imag = _mm_setr_ps(temp_b3.imag, temp_b3.imag, temp_b3.imag, temp_b3.imag);
 
@@ -255,13 +292,13 @@ void *go(void *i) {
 
 				v00.vector = _mm_add_ps(mul00, mul01);
 				v01.vector = _mm_add_ps(mul02, mul03);
-				
+
 				v10.vector = _mm_add_ps(mul10, mul11);
 				v11.vector = _mm_add_ps(mul12, mul13);
-				
+
 				v20.vector = _mm_add_ps(mul20, mul21);
 				v21.vector = _mm_add_ps(mul22, mul23);
-				
+
 				v30.vector = _mm_add_ps(mul30, mul31);
 				v31.vector = _mm_add_ps(mul32, mul33);
 
@@ -274,26 +311,15 @@ void *go(void *i) {
 				gC[j+2][ii].imag += v01.access[2] + v11.access[2] + v21.access[2] + v31.access[2];
 				gC[j+3][ii].real += v00.access[3] + v10.access[3] + v20.access[3] + v30.access[3];
 				gC[j+3][ii].imag += v01.access[3] + v11.access[3] + v21.access[3] + v31.access[3];
-
-
-			/*	gC[j][ii].real += (temp_a0.real * temp_b.real) + (-temp_a0.imag * temp_b.imag);
-				gC[j][ii].imag += (temp_a0.real * temp_b.imag) + (temp_a0.imag * temp_b.real);
-
-				gC[j+1][ii].real += (temp_a1.real * temp_b.real) + (-temp_a1.imag * temp_b.imag);
-				gC[j+1][ii].imag += (temp_a1.real * temp_b.imag) + (temp_a1.imag * temp_b.real);
-
-				gC[j+2][ii].real += (temp_a2.real * temp_b.real) + (-temp_a2.imag * temp_b.imag);
-				gC[j+2][ii].imag += (temp_a2.real * temp_b.imag) + (temp_a2.imag * temp_b.real);
-
-				gC[j+3][ii].real += (temp_a3.real * temp_b.real) + (-temp_a3.imag * temp_b.imag);
-				gC[j+3][ii].imag += (temp_a3.real * temp_b.imag) + (temp_a3.imag * temp_b.real);*/
 			}
-       }
+		}
 
 		ii += NUM_THREADS;
 	}
 	return NULL;
-}
+}*/
+
+
 
 /* the fast version of matmul written by the team */
 void team_matmul(struct complex ** A, struct complex ** B, struct complex ** C, int a_rows, int a_cols, int b_cols) {
@@ -304,7 +330,36 @@ void team_matmul(struct complex ** A, struct complex ** B, struct complex ** C, 
 	ga_cols = a_cols;
 	gb_cols = b_cols;
 	g_size = a_rows * b_cols;
-	long i;
+
+	long i, j;
+
+	// make a new array for the real and imaginary parts of a
+	a_real = malloc(sizeof(float *) * a_rows);
+	a_imag = malloc(sizeof(float *) * a_rows);
+	// make a new array for the real and imaginary parts of b transpose
+	b_real = malloc(sizeof(float *) * a_cols);
+	b_imag = malloc(sizeof(float *) * a_cols);
+
+	// populate a
+	for (i = 0; i < a_rows; i++) {
+		a_real[i] = malloc(sizeof(float) * a_cols);
+		a_imag[i] = malloc(sizeof(float) * a_cols);
+		for (j = 0; j < a_cols; j++) {
+			a_real[i][j] = A[i][j].real;
+			a_imag[i][j] = A[i][j].imag;
+		}
+	}
+
+	// populate and transpose b
+	for (i = 0; i < a_cols; i++) {
+		b_real[i] = malloc(sizeof(float) * b_cols);
+		b_imag[i] = malloc(sizeof(float) * b_cols);
+		for (j = 0; j < b_cols; j++) {
+			b_real[i][j] = B[j][i].real;
+			b_imag[i][j] = B[j][i].imag;
+		}
+	}
+
 	pthread_t t[NUM_THREADS];
 	for (i = 0; i < NUM_THREADS; i++) {
 		pthread_create(&t[i], NULL, go, (void *)i);
