@@ -153,23 +153,96 @@ void matmul(struct complex ** A, struct complex ** B, struct complex ** C, int a
 
 /* the fast version of matmul written by the team */
 void team_matmul(struct complex ** A, struct complex ** B, struct complex ** C, int a_rows, int a_cols, int b_cols) {
-	//replace this
-	matmul(A, B, C, a_rows, a_cols, b_cols);
-	int size;
-	MPI_Comm_size(MPI_COMM_WORLD, &size);
-	int i;
-	for (i = 1; i < size; i++) {
-		char str[100];
-		sprintf(str, "Hello from %d", i);
-		MPI_Send(str, strlen(str), MPI_CHAR, i, 0, MPI_COMM_WORLD);
-	}
-}
+	int rank;
+	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 
-void recv_process() {
-	char mess[100];
-	MPI_Status status;
-	MPI_Recv(mess, 100, MPI_CHAR, 0, 0, MPI_COMM_WORLD, &status);
-	printf("Message: %s, status = %i\n", mess, status);
+	struct complex c;
+
+	// create custom MPI datatype, x_MPI_complexType
+	MPI_Datatype x_MPI_complexType;
+	MPI_Datatype type[2] = {MPI_FLOAT, MPI_FLOAT};
+	int blocklen[2] = {1, 1};
+	MPI_Aint disp[2];
+	disp[0] = (void *)&c.real - (void *)&c;
+	disp[1] = (void *)&c.imag - (void *)&c;
+	MPI_Type_create_struct(2, blocklen, disp, type, &x_MPI_complexType);
+	MPI_Type_commit(&x_MPI_complexType);
+
+	if (rank == 0) {
+
+		// transpose matrix B into Bt
+		struct complex **Bt = new_empty_matrix(a_rows, b_cols);
+		int i,j;
+		for (i = 0; i < a_rows; i++) {
+			for (j = 0; j < a_cols; j++) {
+				Bt[i][j] = B[j][i];
+			}
+		}
+
+		int size;
+		MPI_Comm_size(MPI_COMM_WORLD, &size);
+		for (i = 1; i < size; i++) {
+			unsigned slice = a_cols/(size-1);
+			if (i == size-1)
+				slice = a_cols - (slice*(size-2));
+
+			// let the receiver know the dimensions of the slice it's dealing with
+			// order: [a_cols, a_rows, b_cols, b_rows]
+			int size[4] = {a_cols, slice, b_cols, a_cols};
+			MPI_Send(size, 4, MPI_INT, i, 0, MPI_COMM_WORLD);
+
+			// send entire B matrix
+			MPI_Send(&(B[0][0]), b_cols * a_cols, x_MPI_complexType, i, 1, MPI_COMM_WORLD);
+
+			// send A slice
+			MPI_Send(&(A[0][0]), a_cols * slice, x_MPI_complexType, i, 2, MPI_COMM_WORLD);
+		}
+		struct complex **partialC = new_empty_matrix(a_rows, b_cols);
+		for(i = 1; i < size; i++) {
+			unsigned slice = a_cols/(size-1);
+			unsigned sliceLen = slice;
+			if (i == size-1)
+				sliceLen = a_cols - (slice*(size-2));
+
+			printf("i = %d, address: %d, size: %d\n", i, slice*(i-1), a_rows);
+
+			MPI_Recv(&(C[slice*(i-1)][0]), sliceLen * b_cols, x_MPI_complexType, i, 3, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+
+			//printf("matrix C:\n");
+			//write_out(C, a_rows, b_cols);
+		}
+		matmul(A, B, C, a_rows, a_cols, b_cols);
+	
+		printf("matrix C:\n");
+		write_out(C, a_rows, b_cols);
+	
+
+	}
+	else {
+		// receive the size of the A and B matrix first
+		// order: [a_cols, a_rows, b_cols, b_rows]
+		int size[4];
+		MPI_Recv(size, 4, MPI_INT, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+
+		// receive entire B matrix
+		struct complex **B = new_empty_matrix(size[2], size[3]);
+		MPI_Recv(&(B[0][0]), size[2] * size[3], x_MPI_complexType, 0, 1, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+
+		// receive A slice
+		struct complex **As = new_empty_matrix(size[0], size[1]);
+		MPI_Recv(&(As[0][0]), size[0] * size[1], x_MPI_complexType, 0, 2, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+
+		// create resultant matrix slice C
+		struct complex **Cs = new_empty_matrix(size[1], size[2]);
+		matmul(As, B, Cs, size[1], size[0], size[2]); 
+
+		printf("PARTIAL MATRIX:\n");
+		write_out(Cs, size[1], size[2]);
+	
+
+		// send the result back to root
+		MPI_Send(&(Cs[0][0]), size[1] * size[2], x_MPI_complexType, 0, 3, MPI_COMM_WORLD);
+	}
 }
 
 long long time_diff(struct timeval * start, struct timeval * end) {
@@ -260,7 +333,7 @@ int main(int argc, char ** argv)
 		free_matrix(control_matrix);
 	}
 	else {
-		recv_process();
+		team_matmul(NULL, NULL, NULL, 0, 0, 0);
 	}
 
 	MPI_Finalize();
