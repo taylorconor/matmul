@@ -172,21 +172,24 @@ void team_matmul(struct complex ** A, struct complex ** B, struct complex ** C, 
 	if (rank == 0) {
 		int i, size;
 		MPI_Comm_size(MPI_COMM_WORLD, &size);
+
+		// broadcast the size of the B matrix
+		int bsize[2] = {b_cols, a_cols};
+		MPI_Bcast(bsize, 2, MPI_INT, 0, MPI_COMM_WORLD);
+
+		// broadcast entire B matrix
+		MPI_Bcast(&(B[0][0]), b_cols * a_cols, x_MPI_complexType, 0, MPI_COMM_WORLD);
+
 		for (i = 1; i < size; i++) {
 			unsigned slice = a_rows/(size-1);
 			unsigned sliceLen = slice;
 			if (i == size-1)
 				sliceLen = a_rows - (slice*(size-2));
 
-			printf("i = %d, slice = %d, sliceLen = %d\n", i, slice, sliceLen);
-
 			// let the receiver know the dimensions of the slice it's dealing with
-			// order: [a_cols, a_rows, b_cols, b_rows]
-			int size[4] = {a_cols, sliceLen, b_cols, a_cols};
-			MPI_Send(size, 4, MPI_INT, i, 0, MPI_COMM_WORLD);
-
-			// send entire B matrix
-			MPI_Send(&(B[0][0]), b_cols * a_cols, x_MPI_complexType, i, 1, MPI_COMM_WORLD);
+			// order: [a_cols, a_rows]
+			int size[2] = {a_cols, sliceLen};
+			MPI_Send(size, 2, MPI_INT, i, 0, MPI_COMM_WORLD);
 
 			// send A slice
 			MPI_Send(&(A[slice*(i-1)][0]), a_cols * sliceLen, x_MPI_complexType, i, 2, MPI_COMM_WORLD);
@@ -204,22 +207,21 @@ void team_matmul(struct complex ** A, struct complex ** B, struct complex ** C, 
 		}
 	}
 	else {
-		// receive the size of the A and B matrix first
-		// order: [a_cols, a_rows, b_cols, b_rows]
+		// receive the broadcast size of the B matrix first, into the second half of the size array
+		// order: [b_cols, b_rows]
 		int size[4];
-		MPI_Recv(size, 4, MPI_INT, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+		MPI_Bcast(&size[2], 2, MPI_INT, 0, MPI_COMM_WORLD);
 
-		// receive entire B matrix
+		// receive entire B matrix from broadcast
 		struct complex **B = new_empty_matrix(size[3], size[2]);
-		MPI_Recv(&(B[0][0]), size[2] * size[3], x_MPI_complexType, 0, 1, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+		MPI_Bcast(&(B[0][0]), size[2] * size[3], x_MPI_complexType, 0, MPI_COMM_WORLD);
+
+		// receive the size of the A slice
+		MPI_Recv(&size[0], 2, MPI_INT, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
 
 		// receive A slice
 		struct complex **As = new_empty_matrix(size[1], size[0]);
 		MPI_Recv(&(As[0][0]), size[0] * size[1], x_MPI_complexType, 0, 2, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-		/*if (rank == 1) {
-			printf("R1 A slice:\n");
-			write_out(As, size[1], size[0]);
-		}*/
 
 		// create resultant matrix slice C
 		struct complex **Cs = new_empty_matrix(size[1], size[2]);
