@@ -97,6 +97,8 @@ struct complex ** gen_random_matrix(int dim1, int dim2)
 			/* so the range is now (-(random_range-1), random_range-1)*/
 			if (random() & 1) result[i][j].real = -result[i][j].real;
 			if (random() & 1) result[i][j].imag = -result[i][j].imag;
+
+			result[i][j].imag = 0;
 		}
 	}
 
@@ -159,64 +161,47 @@ void team_matmul(struct complex ** A, struct complex ** B, struct complex ** C, 
 	struct complex c;
 
 	// create custom MPI datatype, x_MPI_complexType
+	const int nitems = 2;
 	MPI_Datatype x_MPI_complexType;
-	MPI_Datatype type[2] = {MPI_FLOAT, MPI_FLOAT};
-	int blocklen[2] = {1, 1};
-	MPI_Aint disp[2];
-	disp[0] = (void *)&c.real - (void *)&c;
-	disp[1] = (void *)&c.imag - (void *)&c;
-	MPI_Type_create_struct(2, blocklen, disp, type, &x_MPI_complexType);
+	MPI_Datatype types[2] = {MPI_FLOAT,MPI_FLOAT};
+	int blocklengths[2] = {1,1};
+	MPI_Aint offsets[2];
+	offsets[0] = offsetof(struct complex,real);
+	offsets[1] = offsetof(struct complex,imag);
+	MPI_Type_create_struct(nitems, blocklengths, offsets, types, &x_MPI_complexType);
 	MPI_Type_commit(&x_MPI_complexType);
 
 	if (rank == 0) {
-
-		// transpose matrix B into Bt
-		struct complex **Bt = new_empty_matrix(a_rows, b_cols);
 		int i,j;
-		for (i = 0; i < a_rows; i++) {
-			for (j = 0; j < a_cols; j++) {
-				Bt[i][j] = B[j][i];
-			}
-		}
-
 		int size;
 		MPI_Comm_size(MPI_COMM_WORLD, &size);
 		for (i = 1; i < size; i++) {
 			unsigned slice = a_cols/(size-1);
+			unsigned sliceLen = slice;
 			if (i == size-1)
-				slice = a_cols - (slice*(size-2));
+				sliceLen = a_cols - (slice*(size-2));
 
 			// let the receiver know the dimensions of the slice it's dealing with
 			// order: [a_cols, a_rows, b_cols, b_rows]
-			int size[4] = {a_cols, slice, b_cols, a_cols};
+			int size[4] = {a_cols, sliceLen, b_cols, a_cols};
 			MPI_Send(size, 4, MPI_INT, i, 0, MPI_COMM_WORLD);
 
 			// send entire B matrix
 			MPI_Send(&(B[0][0]), b_cols * a_cols, x_MPI_complexType, i, 1, MPI_COMM_WORLD);
 
-			// send A slice
-			MPI_Send(&(A[0][0]), a_cols * slice, x_MPI_complexType, i, 2, MPI_COMM_WORLD);
+			// send A slice, row by row
+			for (j = slice*(i-1); j < sliceLen+(slice*(i-1)); j++) {
+				MPI_Send(&(A[j][0]), a_cols, x_MPI_complexType, i, 2, MPI_COMM_WORLD);
+			}
 		}
-		struct complex **partialC = new_empty_matrix(a_rows, b_cols);
 		for(i = 1; i < size; i++) {
 			unsigned slice = a_cols/(size-1);
 			unsigned sliceLen = slice;
 			if (i == size-1)
 				sliceLen = a_cols - (slice*(size-2));
 
-			printf("i = %d, address: %d, size: %d\n", i, slice*(i-1), a_rows);
-
 			MPI_Recv(&(C[slice*(i-1)][0]), sliceLen * b_cols, x_MPI_complexType, i, 3, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-
-			//printf("matrix C:\n");
-			//write_out(C, a_rows, b_cols);
 		}
-		matmul(A, B, C, a_rows, a_cols, b_cols);
-	
-		printf("matrix C:\n");
-		write_out(C, a_rows, b_cols);
-	
-
 	}
 	else {
 		// receive the size of the A and B matrix first
@@ -225,20 +210,21 @@ void team_matmul(struct complex ** A, struct complex ** B, struct complex ** C, 
 		MPI_Recv(size, 4, MPI_INT, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
 
 		// receive entire B matrix
-		struct complex **B = new_empty_matrix(size[2], size[3]);
+		struct complex **B = new_empty_matrix(size[3], size[2]);
 		MPI_Recv(&(B[0][0]), size[2] * size[3], x_MPI_complexType, 0, 1, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
 
-		// receive A slice
-		struct complex **As = new_empty_matrix(size[0], size[1]);
-		MPI_Recv(&(As[0][0]), size[0] * size[1], x_MPI_complexType, 0, 2, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+		// receive A slice, row by row
+		struct complex **As = new_empty_matrix(size[1], size[0]);
+		int i;
+		for (i = 0; i < size[1]; i++) {
+			MPI_Recv(As[i], size[0], x_MPI_complexType, 0, 2, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+		}
 
 		// create resultant matrix slice C
 		struct complex **Cs = new_empty_matrix(size[1], size[2]);
-		matmul(As, B, Cs, size[1], size[0], size[2]); 
 
-		printf("PARTIAL MATRIX:\n");
-		write_out(Cs, size[1], size[2]);
-	
+		// multiply them
+		matmul(As, B, Cs, size[1], size[0], size[2]); 
 
 		// send the result back to root
 		MPI_Send(&(Cs[0][0]), size[1] * size[2], x_MPI_complexType, 0, 3, MPI_COMM_WORLD);
