@@ -189,10 +189,8 @@ void team_matmul(struct complex ** A, struct complex ** B, struct complex ** C, 
 			// send entire B matrix
 			MPI_Send(&(B[0][0]), b_cols * a_cols, x_MPI_complexType, i, 1, MPI_COMM_WORLD);
 
-			// send A slice, row by row
-			for (j = slice*(i-1); j < sliceLen+(slice*(i-1)); j++) {
-				MPI_Send(&(A[j][0]), a_cols, x_MPI_complexType, i, 2, MPI_COMM_WORLD);
-			}
+			// send A slice
+			MPI_Send(&(A[slice*(i-1)][0]), a_cols * sliceLen, x_MPI_complexType, i, 2, MPI_COMM_WORLD);
 		}
 		for(i = 1; i < size; i++) {
 			unsigned slice = a_cols/(size-1);
@@ -213,12 +211,9 @@ void team_matmul(struct complex ** A, struct complex ** B, struct complex ** C, 
 		struct complex **B = new_empty_matrix(size[3], size[2]);
 		MPI_Recv(&(B[0][0]), size[2] * size[3], x_MPI_complexType, 0, 1, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
 
-		// receive A slice, row by row
+		// receive A slice
 		struct complex **As = new_empty_matrix(size[1], size[0]);
-		int i;
-		for (i = 0; i < size[1]; i++) {
-			MPI_Recv(As[i], size[0], x_MPI_complexType, 0, 2, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-		}
+		MPI_Recv(&(As[0][0]), size[0] * size[1], x_MPI_complexType, 0, 2, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
 
 		// create resultant matrix slice C
 		struct complex **Cs = new_empty_matrix(size[1], size[2]);
