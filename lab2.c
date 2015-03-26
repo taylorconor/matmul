@@ -158,8 +158,6 @@ void team_matmul(struct complex ** A, struct complex ** B, struct complex ** C, 
 	int rank;
 	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 
-	struct complex c;
-
 	// create custom MPI datatype, x_MPI_complexType
 	const int nitems = 2;
 	MPI_Datatype x_MPI_complexType;
@@ -172,14 +170,15 @@ void team_matmul(struct complex ** A, struct complex ** B, struct complex ** C, 
 	MPI_Type_commit(&x_MPI_complexType);
 
 	if (rank == 0) {
-		int i,j;
-		int size;
+		int i, size;
 		MPI_Comm_size(MPI_COMM_WORLD, &size);
 		for (i = 1; i < size; i++) {
-			unsigned slice = a_cols/(size-1);
+			unsigned slice = a_rows/(size-1);
 			unsigned sliceLen = slice;
 			if (i == size-1)
-				sliceLen = a_cols - (slice*(size-2));
+				sliceLen = a_rows - (slice*(size-2));
+
+			printf("i = %d, slice = %d, sliceLen = %d\n", i, slice, sliceLen);
 
 			// let the receiver know the dimensions of the slice it's dealing with
 			// order: [a_cols, a_rows, b_cols, b_rows]
@@ -192,12 +191,15 @@ void team_matmul(struct complex ** A, struct complex ** B, struct complex ** C, 
 			// send A slice
 			MPI_Send(&(A[slice*(i-1)][0]), a_cols * sliceLen, x_MPI_complexType, i, 2, MPI_COMM_WORLD);
 		}
+
+		// loop over all processes to get their results
 		for(i = 1; i < size; i++) {
-			unsigned slice = a_cols/(size-1);
+			unsigned slice = a_rows/(size-1);
 			unsigned sliceLen = slice;
 			if (i == size-1)
-				sliceLen = a_cols - (slice*(size-2));
+				sliceLen = a_rows - (slice*(size-2));
 
+			// collect the results into matrix C
 			MPI_Recv(&(C[slice*(i-1)][0]), sliceLen * b_cols, x_MPI_complexType, i, 3, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
 		}
 	}
@@ -214,6 +216,10 @@ void team_matmul(struct complex ** A, struct complex ** B, struct complex ** C, 
 		// receive A slice
 		struct complex **As = new_empty_matrix(size[1], size[0]);
 		MPI_Recv(&(As[0][0]), size[0] * size[1], x_MPI_complexType, 0, 2, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+		/*if (rank == 1) {
+			printf("R1 A slice:\n");
+			write_out(As, size[1], size[0]);
+		}*/
 
 		// create resultant matrix slice C
 		struct complex **Cs = new_empty_matrix(size[1], size[2]);
@@ -268,6 +274,11 @@ int main(int argc, char ** argv)
 		B = gen_random_matrix(b_dim1, b_dim2);
 		C = new_empty_matrix(a_dim1, b_dim2);
 		control_matrix = new_empty_matrix(a_dim1, b_dim2);
+
+		/*printf("Original matrix A:\n");
+		write_out(A, a_dim1, a_dim2);
+		printf("Original matrix B:\n");
+		write_out(B, b_dim1, b_dim2);*/
 
 		DEBUGGING( {
 				printf("matrix A:\n");
