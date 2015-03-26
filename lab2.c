@@ -97,8 +97,6 @@ struct complex ** gen_random_matrix(int dim1, int dim2)
 			/* so the range is now (-(random_range-1), random_range-1)*/
 			if (random() & 1) result[i][j].real = -result[i][j].real;
 			if (random() & 1) result[i][j].imag = -result[i][j].imag;
-
-			result[i][j].imag = 0;
 		}
 	}
 
@@ -276,11 +274,6 @@ int main(int argc, char ** argv)
 		B = gen_random_matrix(b_dim1, b_dim2);
 		C = new_empty_matrix(a_dim1, b_dim2);
 		control_matrix = new_empty_matrix(a_dim1, b_dim2);
-
-		/*printf("Original matrix A:\n");
-		write_out(A, a_dim1, a_dim2);
-		printf("Original matrix B:\n");
-		write_out(B, b_dim1, b_dim2);*/
 
 		DEBUGGING( {
 				printf("matrix A:\n");
